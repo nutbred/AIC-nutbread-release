@@ -17,8 +17,6 @@ maps, representative captions, SigLIP index, L23 scene metadata) **and** the thr
 weights (Qwen3-VL-Embedding-2B, BGE-M3, SigLIP-so400m) under `huggingface/hub/` so
 everything loads **fully offline** (`AIC_OFFLINE_MODELS=1`).
 
-> **Download link: { PUT YOUR SHARE LINK HERE }**
-
 ## Setup — step by step
 
 ### 1. Get the code
