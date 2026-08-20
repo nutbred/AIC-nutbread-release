@@ -1,0 +1,46 @@
+# Version-control and agent/development state
+.git/
+.pi/
+.vscode/
+.idea/
+
+# Local Python/build output
+__pycache__/
+*.py[cod]
+*.log
+server*.log
+.env
+runtime/
+.cache/
+
+# Never put heavy artifacts, images, videos, or local embedding stores in an image.
+data/
+*.pt
+*.npy
+*.faiss
+*.parquet
+*.jsonl
+*.webp
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.mkv
+*.avi
+*.zip
+*.7z
+*.tar
+*.tar.gz
+
+# Online serving image intentionally excludes offline preprocessing and experiments.
+preprocess_family.py
+build_representative_index.py
+convert_av1.py
+extract-features.py
+extract-fps.py
+extract-frames.py
+filter_similar_frames.py
+*-AIC25-Submission.html
+HANDOFF.md
+README.md
+tests/

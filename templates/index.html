@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nutbread · Video Retrieval</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --black: #050505;
+      --surface: #0c0c0c;
+      --raised: #141414;
+      --line: #2a2a2a;
+      --line-strong: #555;
+      --white: #f4f4f0;
+      --muted: #949494;
+      --quiet: #626262;
+      --danger: #f1a7a7;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; overflow: hidden; background: var(--black); color: var(--white); font: 14px/1.5 "DM Sans", "Avenir Next", "Segoe UI", sans-serif; }
+    button, input, select, textarea { font: inherit; }
+    .app-shell { display: grid; grid-template-columns: 340px minmax(0, 1fr); height: 100%; }
+    .sidebar { overflow-y: auto; border-right: 1px solid var(--line); background: var(--surface); padding: 28px 24px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+    .brand { padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+    .brand-kicker, .section-label, .eyebrow { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+    .brand h1 { margin: 7px 0 4px; font: 400 35px/1 "Instrument Serif", Georgia, serif; letter-spacing: -.025em; }
+    .brand-note { color: var(--muted); font-size: 12px; }
+    .status-pill { display: inline-flex; align-items: center; gap: 7px; margin-top: 15px; color: var(--white); font-size: 11px; }
+    .status-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .search-panel { display: grid; gap: 12px; margin: 24px 0; }
+    .field { display: grid; gap: 6px; }
+    .field label { color: var(--muted); font-size: 11px; }
+    input, select, textarea { width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 3px; padding: 10px 11px; background: var(--black); color: var(--white); outline: none; }
+    input::placeholder, textarea::placeholder { color: var(--quiet); }
+    input:focus, select:focus, textarea:focus { border-color: var(--white); box-shadow: 0 0 0 1px var(--white); }
+    button { min-height: 42px; border: 1px solid var(--white); border-radius: 3px; padding: 0 14px; color: var(--black); background: var(--white); font-weight: 600; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+    button:hover { background: #d7d7d3; border-color: #d7d7d3; }
+    button:disabled { opacity: .45; cursor: wait; }
+    .secondary-button, .toolbar button, .temporal-actions button { color: var(--white); background: transparent; border-color: var(--line-strong); }
+    .secondary-button:hover, .toolbar button:hover, .temporal-actions button:hover { color: var(--black); background: var(--white); border-color: var(--white); }
+    .flow { padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    .flow b { color: var(--white); font-weight: 500; }
+    .flow span { display: block; margin: 3px 0; }
+    .toolbar { display: grid; grid-template-columns: 1fr 88px; gap: 8px; margin: 22px 0; }
+    .toolbar > span { grid-column: 1/-1; color: var(--muted); font-size: 11px; }
+    .toolbar input { min-height: 38px; }
+    .toolbar button { min-height: 38px; padding: 0 9px; font-size: 11px; }
+    #export-kis { grid-column: 1/-1; }
+    #qa-answer { width: 100% !important; }
+    .workspace { min-width: 0; overflow-y: auto; padding: 34px 38px 60px; background: var(--black); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+    .workspace-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .workspace-header h2 { margin: 5px 0 0; font: 400 clamp(30px, 4vw, 54px)/1 "Instrument Serif", Georgia, serif; letter-spacing: -.025em; }
+    .workspace-meta { max-width: 470px; color: var(--muted); text-align: right; font-size: 12px; }
+    .summary { min-height: 24px; margin: 16px 0; color: var(--muted); }
+    .warning { border-left: 1px solid var(--white); padding-left: 10px; color: var(--white); margin: 7px 0; }
+    .error { color: var(--danger); }
+    #results { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(265px, 1fr)); }
+    .card { background: var(--surface); border: 1px solid var(--line); overflow: hidden; transition: transform .16s, border-color .16s; }
+    .card:hover { transform: translateY(-2px); border-color: var(--line-strong); }
+    .preview { aspect-ratio: 16/9; background: #000; position: relative; display: grid; place-items: center; overflow: hidden; border-bottom: 1px solid var(--line); }
+    .preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .no-preview { color: var(--muted); text-align: center; padding: 30px; }
+    .rank { position: absolute; top: 9px; right: 9px; background: #050505e8; border: 1px solid #777; padding: 4px 8px; font-size: 11px; font-weight: 600; }
+    .provenance { position: absolute; bottom: 8px; left: 8px; background: #050505e8; border: 1px solid #555; padding: 4px 7px; font-size: 9px; letter-spacing: .05em; }
+    .body { padding: 13px; }
+    .event-time { font: 400 20px/1.1 "Instrument Serif", Georgia, serif; }
+    .title { color: var(--muted); margin: 4px 0 9px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badges { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }
+    .badge { font-size: 9px; border: 1px solid var(--line-strong); color: var(--white); border-radius: 999px; padding: 2px 6px; letter-spacing: .04em; }
+    .evidence { display: grid; gap: 6px; margin: 10px 0; }
+    .evidence > div:not(.asr-context) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: #b8b8b8; font-size: 11px; }
+    .evidence b { color: var(--white); font-weight: 500; }
+    .asr-context { color: #b8b8b8; font-size: 11px; }
+    .asr-context > b { display: block; margin-bottom: 5px; }
+    .asr-segments { display: grid; gap: 4px; max-height: 240px; overflow-y: auto; padding-right: 3px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+    .asr-segment { display: block; border-left: 1px solid var(--line-strong); padding: 5px 7px; line-height: 1.45; }
+    .asr-segment.match { background: var(--white); border-color: var(--white); color: var(--black); }
+    .asr-time { display: block; margin-bottom: 2px; color: #777; font: 500 9px/1.2 "DM Mono", monospace; letter-spacing: .03em; }
+    .asr-segment.match .asr-time { color: #555; }
+    .actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
+    .actions a, .actions button { text-decoration: none; min-height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 2px; padding: 0 8px; background: transparent; color: var(--muted); font-size: 10px; font-weight: 500; }
+    .actions a:hover, .actions button:hover { color: var(--black); background: var(--white); border-color: var(--white); }
+    .card.selected { outline: 2px solid var(--white); outline-offset: 2px; }
+    details { border-top: 1px solid var(--line); }
+    details summary { cursor: pointer; padding: 14px 0; color: var(--white); font-size: 11px; font-weight: 600; list-style: none; }
+    details summary::after { content: "+"; float: right; color: var(--muted); }
+    details[open] summary::after { content: "−"; }
+    .source-drawer { margin-top: 10px; }
+    #sources { padding: 0 0 14px; display: grid; gap: 9px; color: var(--muted); }
+    .source-row { display: grid; grid-template-columns: 100px 62px 1fr; gap: 8px; font-size: 10px; }
+    .ready { color: var(--white); } .missing { color: var(--quiet); }
+    .temporal-panel { margin-top: 8px; }
+    .temporal-panel h2 { display: none; }
+    .temporal-panel textarea { min-height: 110px; resize: vertical; }
+    .temporal-actions { display: grid; gap: 8px; margin-top: 8px; }
+    .temporal-note { padding: 8px 0 14px; color: var(--muted); font-size: 10px; }
+    #results.sequence-results { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    .sequence-card { border: 1px solid var(--line); background: var(--surface); }
+    .sequence-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+    .sequence-head b { font: 400 20px/1.1 "Instrument Serif", Georgia, serif; }
+    .sequence-meta { color: var(--muted); font-size: 10px; }
+    .sequence-strip { display: grid; grid-template-columns: repeat(var(--moments), minmax(180px, 1fr)); overflow-x: auto; }
+    .sequence-moment { min-width: 180px; color: inherit; text-decoration: none; border-right: 1px solid var(--line); }
+    .sequence-moment:last-child { border-right: 0; }
+    .sequence-image { position: relative; aspect-ratio: 16/9; display: grid; place-items: center; overflow: hidden; background: #000; border-bottom: 1px solid var(--line); }
+    .sequence-image img { width: 100%; height: 100%; object-fit: cover; }
+    .sequence-step { position: absolute; top: 7px; left: 7px; padding: 3px 6px; background: #050505e8; border: 1px solid #777; font-size: 9px; }
+    .sequence-provenance { position: absolute; right: 7px; bottom: 7px; max-width: calc(100% - 14px); padding: 3px 5px; overflow: hidden; color: var(--muted); background: #050505e8; border: 1px solid #444; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+    .sequence-body { padding: 10px; }
+    .sequence-query { min-height: 32px; display: -webkit-box; overflow: hidden; color: var(--white); font-size: 11px; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .sequence-time { margin-top: 7px; color: var(--muted); font: 500 9px/1.3 "DM Mono", monospace; }
+    @media (max-width: 860px) { body { overflow: auto; } .app-shell { display: block; height: auto; } .sidebar { overflow: visible; border-right: 0; border-bottom: 1px solid var(--line); } .workspace { overflow: visible; padding: 28px 22px 50px; } .workspace-header { align-items: flex-start; flex-direction: column; } .workspace-meta { text-align: left; } }
+    @media (max-width: 480px) { .sidebar { padding: 24px 18px; } #results { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main class="app-shell">
+  <aside class="sidebar">
+    <header class="brand">
+      <div class="brand-kicker">AIC 2026 · Multimodal retrieval</div>
+      <h1>nutbread</h1>
+      <div class="brand-note">nutbread retrieval console</div>
+      <div class="status-pill" id="status">Checking retrieval sources…</div>
+    </header>
+
+    <form class="search-panel" id="search-form">
+      <div class="field">
+        <label for="query">Vietnamese query</label>
+        <textarea id="query" autocomplete="off" rows="3" placeholder="Người dẫn chương trình nói về giá vàng…" required></textarea>
+      </div>
+      <div class="field">
+        <label for="visual-query">English visual description · optional</label>
+        <input id="visual-query" autocomplete="off" placeholder="A presenter discussing gold prices">
+      </div>
+      <div class="field">
+        <label for="mode">Retrieval mode</label>
+        <select id="mode">
+          <option value="hybrid">Hybrid · all evidence</option>
+          <option value="visual">Visual only</option>
+          <option value="spoken">Spoken only</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="scope">Search collection</label>
+        <select id="scope">
+          <option value="general" selected>General · exclude L23 bikes</option>
+          <option value="bike">Bike · L23 only</option>
+          <option value="global">Global · all videos</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="video">Restrict to video · optional</label>
+        <input id="video" placeholder="L21_V001" pattern="L\d{2}_V\d{3}">
+      </div>
+      <button id="search-button" type="submit">Run retrieval</button>
+    </form>
+
+    <div class="flow" aria-label="Online query flow">
+      <span><b>01</b> Global Qwen3 visual recall</span>
+      <span><b>02</b> BGE-M3 + lexical ASR / scene / OCR</span>
+      <span><b>03</b> Time fusion + evaluator slate</span>
+    </div>
+
+    <div class="toolbar">
+      <span id="selected-count">0 selected</span>
+      <input id="query-num" value="1" aria-label="Query number">
+      <button type="button" id="export-kis">Export KIS · selected or top 100</button>
+      <input id="qa-answer" placeholder="VQA answer">
+      <button type="button" id="export-qa">Export VQA</button>
+    </div>
+
+    <details class="temporal-panel">
+      <summary>Temporal alignment</summary>
+      <div class="field">
+        <label for="temporal-queries">One moment per line</label>
+        <textarea id="temporal-queries" placeholder="Người đàn ông bước vào phòng&#10;Ông ấy mở chiếc hộp&#10;Mọi người vỗ tay"></textarea>
+      </div>
+      <div class="temporal-actions">
+        <button type="button" id="temporal-search">Search sequence</button>
+        <button type="button" id="export-temporal">Export temporal top 100</button>
+      </div>
+      <div class="summary" id="temporal-summary"></div>
+      <div id="temporal-results"></div>
+    </details>
+
+    <details class="temporal-panel" style="margin-top:14px">
+      <summary>Frame index calculator</summary>
+      <div class="field">
+        <label for="fc-timestamp">Time · minute:second.milliseconds or seconds</label>
+        <input id="fc-timestamp" placeholder="01:23.456 · or 83.456">
+      </div>
+      <div class="field">
+        <label for="fc-fps">FPS</label>
+        <input id="fc-fps" type="number" step="any" value="25">
+      </div>
+      <div class="field">
+        <label for="fc-mode">Mode</label>
+        <select id="fc-mode">
+          <option value="time2frame">time → frame index</option>
+          <option value="frame2time">frame index → time</option>
+        </select>
+      </div>
+      <button type="button" id="fc-calc" class="secondary-button">Calculate</button>
+      <div class="summary" id="fc-result" style="margin:10px 0 0;font-size:12px"></div>
+    </details>
+
+    <details class="source-drawer">
+      <summary>Retrieval sources</summary>
+      <div id="sources"></div>
+    </details>
+  </aside>
+
+  <section class="workspace">
+    <header class="workspace-header">
+      <div>
+        <div class="eyebrow">Search results</div>
+        <h2>Find the exact moment.</h2>
+      </div>
+      <div class="workspace-meta">Click a frame to select it. KIS and VQA exports use selected frames; with no selection, the evaluator-aware top 100 is exported.</div>
+    </header>
+    <div class="summary" id="summary">Ready for a query.</div>
+    <section id="results" aria-live="polite"></section>
+  </section>
+</main>
+
+<script>
+  const form = document.getElementById('search-form');
+  const results = document.getElementById('results');
+  const summary = document.getElementById('summary');
+  const button = document.getElementById('search-button');
+  const selected = new Map();
+  let lastEvents = [];
+  let lastCandidates = [];
+  let lastTemporal = [];
+
+  function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+  }
+  function escapeAttr(value) {
+    return escapeHtml(value).replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+  }
+  function offsetText(ms) {
+    if (ms == null) return '';
+    const sign = ms >= 0 ? '+' : '−';
+    return `${sign}${Math.abs(ms)} ms`;
+  }
+  function compactTime(ms) {
+    const totalSeconds = Math.max(0, Number(ms) || 0) / 1000;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = (totalSeconds - minutes * 60).toFixed(1).padStart(4, '0');
+    return `${minutes}:${seconds}`;
+  }
+  function renderAsrContext(segments) {
+    if (!segments?.length) return '';
+    const rows = segments.map(segment => {
+      const relation = segment.relation === 'match' ? 'match' : '';
+      const time = `${compactTime(segment.start_ms)}-${compactTime(segment.end_ms)}`;
+      return `<span class="asr-segment ${relation}"><span class="asr-time">${escapeHtml(time)}${relation ? ' / MATCH' : ''}</span>${escapeHtml(segment.text)}</span>`;
+    }).join('');
+    return `<div class="asr-context"><b>ASR context:</b><div class="asr-segments">${rows}</div></div>`;
+  }
+  function updateSelected() {
+    document.getElementById('selected-count').textContent = `${selected.size} selected`;
+  }
+  function renderEvent(event) {
+    const preview = event.preview || {};
+    const image = preview.url
+      ? `<img src="${escapeAttr(preview.url)}" loading="lazy" alt="${escapeAttr(event.video_id)} at ${escapeAttr(event.timestamp)}">`
+      : `<div class="no-preview">No local image<br><small>Timestamp and watch link remain available</small></div>`;
+    const fields = [];
+    if (event.scene) fields.push(`<div><b>Scene:</b> ${escapeHtml(event.scene)}</div>`);
+    if (event.ocr?.length) fields.push(`<div><b>OCR:</b> ${escapeHtml(event.ocr.join(' · '))}</div>`);
+    if (event.asr_context?.length) fields.push(renderAsrContext(event.asr_context));
+    else if (event.asr) fields.push(`<div><b>ASR:</b> ${escapeHtml(event.asr)}</div>`);
+    if (event.objects?.length) fields.push(`<div><b>Objects:</b> ${escapeHtml(event.objects.join(' · '))}</div>`);
+    if (event.l23_scene) {
+      const scene = event.l23_scene;
+      const top = (scene.top_colors || []).map(row => row.color).join(' / ');
+      const bottom = (scene.bottom_colors || []).map(row => row.color).join(' / ');
+      const details = [scene.camera_type, scene.cyclist_count ? `${scene.cyclist_count} cyclists` : '', top ? `top ${top}` : '', bottom ? `bottom ${bottom}` : ''].filter(Boolean).join(' · ');
+      if (details) fields.push(`<div><b>L23 scene:</b> ${escapeHtml(details)}</div>`);
+    }
+    const watch = event.watch_url_with_timestamp
+      ? `<a href="${escapeAttr(event.watch_url_with_timestamp)}" target="_blank" rel="noopener">Open video</a>` : '';
+    const timeline = event.watch_url_with_timestamp
+      ? `<a href="${escapeAttr(event.watch_url_with_timestamp)}" target="_blank" rel="noopener">±5s timeline</a>` : '';
+    return `<article class="card" data-video="${escapeAttr(event.video_id)}" data-frame="${escapeAttr(event.export_frame_id || '')}">
+      <div class="preview">${image}<span class="rank">#${event.rank}</span>
+        <span class="provenance">${escapeHtml(preview.label || 'NO LOCAL PREVIEW')}${preview.offset_ms ? ` · ${offsetText(preview.offset_ms)}` : ''}</span>
+      </div>
+      <div class="body">
+        <div class="event-time">${escapeHtml(event.video_id)} · ${escapeHtml(event.timestamp)}</div>
+        <div class="title" title="${escapeAttr(event.title || '')}">${escapeHtml(event.title || 'Untitled video')}</div>
+        <div class="badges">${[...(event.badges || []), ...(event.l23_scene?.query_match?.boost ? ['L23 color/shot match'] : [])].map(b => `<span class="badge">${escapeHtml(b)}</span>`).join('')}</div>
+        <div class="evidence">${fields.join('')}</div>
+        <div class="actions">${watch}${timeline}<button type="button" class="similar">Similar frame</button></div>
+      </div>
+    </article>`;
+  }
+  function renderTemporalHypothesis(row) {
+    const moments = row.moments || [];
+    const strip = moments.map((moment, index) => {
+      const preview = moment.preview || {};
+      const image = preview.url
+        ? `<img src="${escapeAttr(preview.url)}" loading="lazy" alt="Moment ${index + 1} at ${escapeAttr(moment.timestamp || '')}">`
+        : `<div class="no-preview">No local image</div>`;
+      const content = `<div class="sequence-image">${image}<span class="sequence-step">M${index + 1}</span>` +
+        `<span class="sequence-provenance">${escapeHtml(preview.label || 'NO LOCAL PREVIEW')}${preview.offset_ms ? ` · ${offsetText(preview.offset_ms)}` : ''}</span></div>` +
+        `<div class="sequence-body"><div class="sequence-query">${escapeHtml(moment.query || `Moment ${index + 1}`)}</div>` +
+        `<div class="sequence-time">${escapeHtml(moment.timestamp || compactTime(moment.timestamp_ms))} · frame ${escapeHtml(moment.frame_id)} · source rank ${escapeHtml(moment.moment_rank)}</div></div>`;
+      return moment.watch_url_with_timestamp
+        ? `<a class="sequence-moment" href="${escapeAttr(moment.watch_url_with_timestamp)}" target="_blank" rel="noopener">${content}</a>`
+        : `<div class="sequence-moment">${content}</div>`;
+    }).join('');
+    return `<article class="sequence-card"><div class="sequence-head"><b>#${row.rank} ${escapeHtml(row.video_id)}</b>` +
+      `<span class="sequence-meta">ordered distinct path · ${moments.length} moments · score ${escapeHtml(row.score)}</span></div>` +
+      `<div class="sequence-strip" style="--moments:${Math.max(1, moments.length)}">${strip}</div></article>`;
+  }
+  function bindCards() {
+    document.querySelectorAll('.card').forEach(card => {
+      card.addEventListener('click', event => {
+        if (event.target.closest('a,button')) return;
+        const video = card.dataset.video;
+        const frame = card.dataset.frame;
+        if (!frame) return;
+        const key = `${video}:${frame}`;
+        if (selected.has(key)) { selected.delete(key); card.classList.remove('selected'); }
+        else { selected.set(key, {video_id: video, frame_id: frame}); card.classList.add('selected'); }
+        updateSelected();
+      });
+      card.querySelector('.similar').addEventListener('click', () => {
+        document.getElementById('video').value = card.dataset.video;
+        summary.textContent = `Restricted to ${card.dataset.video}. Enter a text description for the similar moment.`;
+        document.getElementById('query').focus();
+      });
+    });
+  }
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    button.disabled = true; button.textContent = 'Searching…';
+    results.classList.remove('sequence-results');
+    results.innerHTML = ''; summary.textContent = 'Running available retrieval branches…';
+    try {
+      const response = await fetch('/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        query: document.getElementById('query').value,
+        visual_query: document.getElementById('visual-query').value || null,
+        mode: document.getElementById('mode').value,
+        scope: document.getElementById('scope').value,
+        restrict_video: document.getElementById('video').value || null
+      })});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      lastEvents = data.results || [];
+      lastCandidates = data.submission_candidates || [];
+      selected.clear(); updateSelected();
+      results.innerHTML = lastEvents.map(renderEvent).join(''); bindCards();
+      const sources = Object.entries(data.source_counts || {}).map(([name,count]) => `${name} ${count}`).join(' · ');
+      const scope = data.scope?.name
+        ? ` · ${escapeHtml(data.scope.name)} scope` : '';
+      summary.innerHTML = `<b>${lastEvents.length}</b> events in ${data.elapsed_time}s${sources ? ` · ${escapeHtml(sources)}` : ''}` +
+        scope +
+        (data.warnings || []).map(w => `<div class="warning">${escapeHtml(w)}</div>`).join('');
+      if (!lastEvents.length) summary.innerHTML += '<div>No event survived fusion. Check source status or try lexical terms.</div>';
+    } catch (error) { summary.innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`; }
+    finally { button.disabled = false; button.textContent = 'Run retrieval'; }
+  });
+  async function exportCsv(kind) {
+    const body = {query_num: document.getElementById('query-num').value || '1', selected: [...selected.values()], ranked: lastCandidates, answer: document.getElementById('qa-answer').value};
+    const response = await fetch(`/export/${kind}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if (!response.ok) { const data = await response.json(); alert(data.error || 'Export failed'); return; }
+    const blob = await response.blob(); const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob); link.download = `query-${body.query_num}-${kind}.csv`; link.click(); URL.revokeObjectURL(link.href);
+  }
+  document.getElementById('export-kis').addEventListener('click', () => exportCsv('kis'));
+  document.getElementById('export-qa').addEventListener('click', () => exportCsv('qa'));
+
+  document.getElementById('temporal-search').addEventListener('click', async () => {
+    const temporalButton = document.getElementById('temporal-search');
+    const temporalSummary = document.getElementById('temporal-summary');
+    temporalButton.disabled = true; temporalSummary.textContent = 'Searching each moment and aligning videos…';
+    try {
+      const response = await fetch('/temporal-search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        queries: document.getElementById('temporal-queries').value,
+        mode: document.getElementById('mode').value,
+        scope: document.getElementById('scope').value,
+        restrict_video: document.getElementById('video').value || null
+      })});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      lastTemporal = data.hypotheses || [];
+      const primarySequences = lastTemporal.filter(row => row.variant === 'primary');
+      const temporalScope = data.scope?.name
+        ? ` · ${data.scope.name} scope` : '';
+      temporalSummary.textContent = `${primarySequences.length} ordered visual sequences · ${lastTemporal.length} export candidates · ${data.elapsed_time}s${temporalScope}`;
+      document.getElementById('temporal-results').innerHTML = '<div class="temporal-note">Previewing primary paths in the main results area. Time-jitter variants are kept only for CSV export.</div>';
+      results.classList.add('sequence-results');
+      results.innerHTML = primarySequences.slice(0, 20).map(renderTemporalHypothesis).join('');
+      summary.innerHTML = `<b>${primarySequences.length}</b> ordered, distinct sequences in ${data.elapsed_time}s` +
+        (data.warnings || []).map(w => `<div class="warning">${escapeHtml(w)}</div>`).join('');
+      if (!primarySequences.length) summary.innerHTML += '<div>No video has a complete chronologically ordered path for every query line.</div>';
+    } catch (error) { temporalSummary.innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`; }
+    finally { temporalButton.disabled = false; }
+  });
+  document.getElementById('export-temporal').addEventListener('click', async () => {
+    const body = {query_num: document.getElementById('query-num').value || '1', hypotheses: lastTemporal};
+    const response = await fetch('/export/temporal', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if (!response.ok) { const data = await response.json(); alert(data.error || 'Export failed'); return; }
+    const blob = await response.blob(); const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob); link.download = `query-${body.query_num}-temporal.csv`; link.click(); URL.revokeObjectURL(link.href);
+  });
+
+  fetch('/api/status').then(r => r.json()).then(data => {
+    const configured = data.sources.filter(s => s.configured).length;
+    document.getElementById('status').textContent = `${configured}/${data.sources.length} sources configured`;
+    document.getElementById('sources').innerHTML = data.sources.map(source =>
+      `<div class="source-row"><b>${escapeHtml(source.name)}</b><span class="${source.configured ? 'ready' : 'missing'}">${source.configured ? 'configured' : 'missing'}</span><span>${escapeHtml(source.role)}</span></div>`
+    ).join('');
+  }).catch(error => { document.getElementById('status').textContent = `Status error: ${error.message}`; });
+
+  // Frame index calculator
+  document.getElementById('fc-calc').addEventListener('click', () => {
+    const raw = document.getElementById('fc-timestamp').value.trim();
+    const fps = parseFloat(document.getElementById('fc-fps').value);
+    const mode = document.getElementById('fc-mode').value;
+    const out = document.getElementById('fc-result');
+    const bad = msg => { out.innerHTML = `<span class="error">${escapeHtml(msg)}</span>`; };
+    if (!raw) return bad('Enter a time or frame index.');
+    if (!(fps > 0)) return bad('FPS must be a positive number.');
+    const formatTime = seconds => {
+      const min = Math.floor(seconds / 60);
+      const s = seconds - min * 60;
+      return `${min}:${s.toFixed(3).padStart(6, '0')}`;
+    };
+    if (mode === 'time2frame') {
+      let seconds;
+      if (/^\d+:\d+(\.\d+)?$/.test(raw)) {          // mm:ss[.fff]
+        const [m, rest] = raw.split(':');
+        seconds = parseInt(m, 10) * 60 + parseFloat(rest);
+      } else if (!isNaN(parseFloat(raw))) {           // plain seconds
+        seconds = parseFloat(raw);
+      } else {
+        return bad(`Cannot parse "${raw}". Use minute:second.milliseconds (01:23.456) or plain seconds (83.456).`);
+      }
+      const frame = Math.round(seconds * fps);        // frame_index = (mins*60+s+ms/1000) * fps
+      out.innerHTML =
+        `Seconds: <b>${seconds.toFixed(3)}</b><br>` +
+        `frame_index = int(${seconds.toFixed(3)} × ${fps}) = <b>${frame}</b>`;
+    } else {                                           // frame2time
+      const frame = parseInt(raw, 10);
+      if (isNaN(frame) || frame < 0) return bad(`Cannot parse "${raw}" as a frame index.`);
+      const seconds = frame / fps;
+      out.innerHTML =
+        `frame_index = <b>${frame}</b><br>` +
+        `Time: ${formatTime(seconds)} at ${fps} fps`;
+    }
+  });
+</script>
+</body>
+</html>

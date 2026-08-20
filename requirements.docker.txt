@@ -1,0 +1,15 @@
+# Runtime dependencies for Docker. PyTorch and torchvision are pinned in Dockerfile
+# from the PyTorch cu118 index to match NVIDIA drivers supporting CUDA >= 11.8.
+flask==3.1.3
+faiss-cpu==1.15.0
+numpy==2.4.4
+transformers==5.14.1
+Pillow==12.2.0
+pandas==3.0.5
+pyarrow==25.0.0
+sentence-transformers==5.7.0
+sentencepiece==0.2.2
+protobuf==7.35.1
+accelerate==1.14.0
+qwen-vl-utils==0.0.14
+open_clip_torch==3.3.0

@@ -1,0 +1,70 @@
+services:
+  retrieval-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aic-multimodal-retrieval:dev
+    container_name: aic-multimodal-retrieval
+    restart: unless-stopped
+    ports:
+      # Bind to localhost by default. Set HOST_BIND_ADDRESS=0.0.0.0 to expose
+      # the development server to devices on the local network.
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${PORT:-5000}:5000"
+    environment:
+      AIC_WORKSPACE_ROOT: /workspace
+      AIC_5FPS_DATA: /five-fps
+      AIC_CACHE_DIR: /runtime
+      AIC_OFFLINE_MODELS: "${AIC_OFFLINE_MODELS:-1}"
+      AIC_DEVICE: "${AIC_DEVICE:-cuda}"
+      AIC_SIGLIP_DEVICE: "${AIC_SIGLIP_DEVICE:-cpu}"
+      AIC_RESIDENT_MODELS: "${AIC_RESIDENT_MODELS:-1}"
+      AIC_PRELOAD_MODELS: "${AIC_PRELOAD_MODELS:-1}"
+      AIC_ENABLE_QWEN: "${AIC_ENABLE_QWEN:-1}"
+      AIC_QWEN_INDEX: "${AIC_QWEN_INDEX:-/workspace/query_last_year/qwen-random/metadata/aic25_qwen_merged_search/index/qwen3vl_index_flat_ip.faiss}"
+      AIC_QWEN_METADATA: "${AIC_QWEN_METADATA:-/workspace/query_last_year/qwen-random/metadata/aic25_qwen_merged_search/index/qwen3vl_metadata.jsonl}"
+      AIC_ENABLE_5FPS: "${AIC_ENABLE_5FPS:-1}"
+      AIC_ENABLE_DENSE_ASR: "${AIC_ENABLE_DENSE_ASR:-1}"
+      AIC_ENABLE_DENSE_REPRESENTATIVE: "${AIC_ENABLE_DENSE_REPRESENTATIVE:-1}"
+      AIC_ENABLE_BTC_CLIP: "${AIC_ENABLE_BTC_CLIP:-0}"
+      AIC_ENABLE_L23_SCENE_RERANK: "${AIC_ENABLE_L23_SCENE_RERANK:-1}"
+      AIC_L23_SCENES_DB: /l23-scenes/l23_scenes.sqlite
+      HF_HOME: /hf
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      # External data bundle.
+      - type: bind
+        source: ${HOST_WORKSPACE_ROOT:?Copy .env.example to .env and set HOST_WORKSPACE_ROOT}
+        target: /workspace
+        read_only: true
+      # External 5-FPS frames, embeddings, and maps.
+      - type: bind
+        source: ${HOST_5FPS_DATA:?Copy .env.example to .env and set HOST_5FPS_DATA}
+        target: /five-fps
+        read_only: true
+      # Supplied 5-FPS index; the entrypoint copies it to writable runtime storage.
+      - type: bind
+        source: ${HOST_SIGLIP_INDEX_DIR:?Copy .env.example to .env and set HOST_SIGLIP_INDEX_DIR}
+        target: /supplied-indexes
+        read_only: true
+      # Optional representative BGE embeddings.
+      - type: bind
+        source: ${HOST_REPRESENTATIVE_EMBEDDINGS:?Copy .env.example to .env and set HOST_REPRESENTATIVE_EMBEDDINGS}
+        target: /app/data/representative_bge_m3_embeddings.npy
+        read_only: true
+      # Offline-built L23 cycling scene and clothing-color metadata.
+      # Mount a directory so the app can start before the optional database is built.
+      - type: bind
+        source: ${HOST_L23_SCENES_DIR:-./data}
+        target: /l23-scenes
+        read_only: true
+      # Hugging Face model cache.
+      - type: bind
+        source: ${HOST_HF_CACHE_DIR:?Copy .env.example to .env and set HOST_HF_CACHE_DIR}
+        target: /hf
+        read_only: true
+      # Writable runtime index and lazy previews.
+      - type: bind
+        source: ${HOST_RUNTIME_DIR:-./runtime}
+        target: /runtime
+    gpus: all

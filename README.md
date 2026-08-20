@@ -1,0 +1,83 @@
+# AIC-nutbread (online release)
+
+Local Vietnamese video retrieval server. This repository contains **only the online
+runtime code** — the Flask UI + API, retrieval/fusion logic, and the Docker packaging.
+Offline preprocessing tools (frame extraction, embedding building, index construction,
+ASR/leader tooling) are intentionally **not** included here.
+
+## What you need to run it
+
+1. **Docker Desktop** (WSL2 backend) — [docker.com](https://www.docker.com/products/docker-desktop/)
+2. **An NVIDIA GPU** with a recent driver (RTX 4060 / 8 GB works; 8 GB is the tested profile)
+3. **The all-in-one data + model zip** (`aic-data-essential.zip`, ~11 GB)
+
+The zip is **not** in this repo (too large for GitHub). It contains the retrieval indexes
+(ASR, Qwen index, OCR, maps, representative captions, SigLIP index, L23 scene metadata)
+**and** the three model weights (Qwen3-VL-Embedding-2B, BGE-M3, SigLIP-so400m) under a
+`huggingface/hub/` folder so everything loads **fully offline** (`AIC_OFFLINE_MODELS=1`).
+
+> **Download link: { PUT YOUR SHARE LINK HERE }**
+
+## Setup — step by step
+
+### 1. Get the code
+```powershell
+git clone git@github.com:nutbred/AIC-release.git
+cd AIC-release
+```
+
+### 2. Extract the zip
+Extract `aic-data-essential.zip` so it makes a folder named **`AIC-data`**, e.g.
+`C:\Users\<you>\AIC-data\`.
+
+### 3. Configure
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+Set these to your machine (forward slashes), keeping offline mode ON:
+
+```ini
+HOST_WORKSPACE_ROOT=C:/Users/<you>/AIC-data
+HOST_5FPS_DATA=C:/Users/<you>/AIC-data/kaggle/working/data
+HOST_SIGLIP_INDEX_DIR=C:/Users/<you>/AIC-data/aic-runtime/indexes
+HOST_REPRESENTATIVE_EMBEDDINGS=C:/Users/<you>/AIC-data/representative_bge_m3_embeddings.npy
+HOST_HF_CACHE_DIR=C:/Users/<you>/AIC-data/huggingface
+AIC_OFFLINE_MODELS=1
+PORT=5000
+HOST_BIND_ADDRESS=127.0.0.1
+```
+
+### 4. Start
+```powershell
+.\run-docker.ps1 -Build
+```
+Open **http://127.0.0.1:5000**. Stop with `.\stop-docker.ps1`.
+
+### 5. Validate
+```powershell
+.\test-docker.ps1
+```
+
+## Model resolution
+
+The release uses `AIC_OFFLINE_MODELS=1` (models shipped in the zip's `huggingface/`).
+If you have the zip **without** models, set `AIC_OFFLINE_MODELS=0` and the app will
+auto-download Qwen3-VL-Embedding-2B, BGE-M3, and SigLIP from HuggingFace on first boot
+(all public, not gated). SigLIP defaults to CPU; Qwen and BGE run on CUDA.
+
+## Architecture (online runtime)
+
+- `app.py` — Flask server (search, temporal-search, previews, KIS/VQA export)
+- `retrieval.py` — source wrappers (Qwen3-VL random, BGE-M3/ASR, representative,
+  SigLIP 5-FPS, BTC clip) + time fusion + evaluator-aware ranking
+- `preview.py` — frame preview resolution
+- `submission.py` — KIS / temporal CSV exports
+- `l23_scenes.py` — L23 scene & clothing-color metadata
+- `docker/`, `Dockerfile`, `docker-compose.yml` — reproducible GPU container
+
+## Limits
+
+- Search quality depends on the supplied indexes/maps/ASR/OCR data and model cache.
+- Raw videos are optional (needed only for FFmpeg preview fallback).
+- Private / local use only.
