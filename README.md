@@ -59,6 +59,30 @@ Open **http://127.0.0.1:5000**. Stop with `.\stop-docker.ps1`.
 .\test-docker.ps1
 ```
 
+## Share with one friend over Tailscale (private)
+
+The app has **no login** — never expose it directly to the public internet.
+For a single trusted person, the safe way is a private Tailscale mesh VPN:
+
+```powershell
+# 1. Both of you install Tailscale and sign into the SAME account
+# 2. Run the helper on this machine
+.\share-tailscale.ps1
+#    -> prints the URL, e.g.  http://100.101.102.103:5000
+```
+
+Your friend opens that URL. Only devices on your tailnet can reach it — it is not
+on the public internet. To go back to localhost-only:
+
+```powershell
+.\share-tailscale.ps1 -Off
+```
+
+> `share-tailscale.ps1` sets `HOST_BIND_ADDRESS=0.0.0.0` in `.env`, recreates the
+> container, and prints your Tailscale URL. It also sets the value back to
+> `127.0.0.1` with `-Off`. If it can't auto-detect your Tailscale IP, run
+> `tailscale ip -4` and type it in.
+
 ## Model resolution
 
 The release uses `AIC_OFFLINE_MODELS=1` (models shipped in the zip's `huggingface/`).

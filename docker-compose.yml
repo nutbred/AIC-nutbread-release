@@ -7,8 +7,9 @@ services:
     container_name: aic-multimodal-retrieval
     restart: unless-stopped
     ports:
-      # Bind to localhost by default. Set HOST_BIND_ADDRESS=0.0.0.0 to expose
-      # the development server to devices on the local network.
+      # Local only by default. To share with ONE trusted friend over Tailscale,
+      # set HOST_BIND_ADDRESS=0.0.0.0 in .env (never host this app directly on
+      # the public internet - it has no authentication).
       - "${HOST_BIND_ADDRESS:-127.0.0.1}:${PORT:-5000}:5000"
     environment:
       AIC_WORKSPACE_ROOT: /workspace
