@@ -23,8 +23,8 @@ everything loads **fully offline** (`AIC_OFFLINE_MODELS=1`).
 
 ### 1. Get the code
 ```powershell
-git clone git@github.com:nutbred/AIC-release.git
-cd AIC-release
+git clone git@github.com:nutbred/AIC-nutbread-release.git
+cd AIC-nutbread-release
 ```
 
 ### 2. Extract the zip
