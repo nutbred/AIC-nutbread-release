@@ -9,12 +9,13 @@ ASR/leader tooling) are intentionally **not** included here.
 
 1. **Docker Desktop** (WSL2 backend) — [docker.com](https://www.docker.com/products/docker-desktop/)
 2. **An NVIDIA GPU** with a recent driver (RTX 4060 / 8 GB works; 8 GB is the tested profile)
-3. **The all-in-one data + model zip** (`aic-data-essential.zip`, ~11 GB)
+3. **The all-in-one data + model zip** (`aic-data-full.zip`, ~39 GB)
 
-The zip is **not** in this repo (too large for GitHub). It contains the retrieval indexes
-(ASR, Qwen index, OCR, maps, representative captions, SigLIP index, L23 scene metadata)
-**and** the three model weights (Qwen3-VL-Embedding-2B, BGE-M3, SigLIP-so400m) under a
-`huggingface/hub/` folder so everything loads **fully offline** (`AIC_OFFLINE_MODELS=1`).
+The zip is **not** in this repo (too large for GitHub). It contains the full retrieval
+dataset and indexes (Keyframes L21-L30 including all subseries, ASR, Qwen index, OCR,
+maps, representative captions, SigLIP index, L23 scene metadata) **and** the three model
+weights (Qwen3-VL-Embedding-2B, BGE-M3, SigLIP-so400m) under `huggingface/hub/` so
+everything loads **fully offline** (`AIC_OFFLINE_MODELS=1`).
 
 > **Download link: { PUT YOUR SHARE LINK HERE }**
 
@@ -27,7 +28,7 @@ cd AIC-release
 ```
 
 ### 2. Extract the zip
-Extract `aic-data-essential.zip` so it makes a folder named **`AIC-data`**, e.g.
+Extract `aic-data-full.zip` so it makes a folder named **`AIC-data`**, e.g.
 `C:\Users\<you>\AIC-data\`.
 
 ### 3. Configure
