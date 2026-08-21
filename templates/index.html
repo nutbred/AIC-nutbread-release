@@ -107,6 +107,9 @@
     .sequence-strip { display: grid; grid-template-columns: repeat(var(--moments), minmax(180px, 1fr)); overflow-x: auto; }
     .sequence-moment { min-width: 180px; color: inherit; text-decoration: none; border-right: 1px solid var(--line); }
     .sequence-moment:last-child { border-right: 0; }
+    .sequence-moment.sequence-missing { opacity: 0.9; }
+    .sequence-moment.sequence-missing .sequence-image { background: repeating-linear-gradient(45deg, #111, #111 8px, #1c1c1c 8px, #1c1c1c 16px); }
+    .sequence-card.sequence-card-partial { border-style: dashed; }
     .sequence-image { position: relative; aspect-ratio: 16/9; display: grid; place-items: center; overflow: hidden; background: #000; border-bottom: 1px solid var(--line); }
     .sequence-image img { width: 100%; height: 100%; object-fit: cover; }
     .sequence-step { position: absolute; top: 7px; left: 7px; padding: 3px 6px; background: #050505e8; border: 1px solid #777; font-size: 9px; }
@@ -169,7 +172,7 @@
     <div class="toolbar">
       <span id="selected-count">0 selected</span>
       <input id="query-num" value="1" aria-label="Query number">
-      <button type="button" id="export-kis">Export KIS · selected or top 100</button>
+      <button type="button" id="export-kis">Export KIS · selection + top 100</button>
       <input id="qa-answer" placeholder="VQA answer">
       <button type="button" id="export-qa">Export VQA</button>
     </div>
@@ -221,7 +224,7 @@
         <div class="eyebrow">Search results</div>
         <h2>Find the exact moment.</h2>
       </div>
-      <div class="workspace-meta">Click a frame to select it. KIS and VQA exports use selected frames; with no selection, the evaluator-aware top 100 is exported.</div>
+      <div class="workspace-meta">Click a frame to select it. Selections export at rank 1 (in click order); the retrieval top 100 fills the remaining ranks as a safety net — any correct frame inside the top 100 still scores.</div>
     </header>
     <div class="summary" id="summary">Ready for a query.</div>
     <section id="results" aria-live="polite"></section>
@@ -306,21 +309,30 @@
   }
   function renderTemporalHypothesis(row) {
     const moments = row.moments || [];
+    const partial = String(row.variant || '').startsWith('partial');
     const strip = moments.map((moment, index) => {
-      const preview = moment.preview || {};
-      const image = preview.url
-        ? `<img src="${escapeAttr(preview.url)}" loading="lazy" alt="Moment ${index + 1} at ${escapeAttr(moment.timestamp || '')}">`
-        : `<div class="no-preview">No local image</div>`;
+      const missing = !moment.frame_id;
+      const preview = missing ? {} : (moment.preview || {});
+      const image = missing
+        ? `<div class="no-preview">NOT FOUND</div>`
+        : preview.url
+          ? `<img src="${escapeAttr(preview.url)}" loading="lazy" alt="Moment ${index + 1} at ${escapeAttr(moment.timestamp || '')}">`
+          : `<div class="no-preview">No local image</div>`;
       const content = `<div class="sequence-image">${image}<span class="sequence-step">M${index + 1}</span>` +
-        `<span class="sequence-provenance">${escapeHtml(preview.label || 'NO LOCAL PREVIEW')}${preview.offset_ms ? ` · ${offsetText(preview.offset_ms)}` : ''}</span></div>` +
+        `<span class="sequence-provenance">${missing ? 'no candidate — verify in video' : escapeHtml(preview.label || 'NO LOCAL PREVIEW')}${preview.offset_ms ? ` · ${offsetText(preview.offset_ms)}` : ''}</span></div>` +
         `<div class="sequence-body"><div class="sequence-query">${escapeHtml(moment.query || `Moment ${index + 1}`)}</div>` +
-        `<div class="sequence-time">${escapeHtml(moment.timestamp || compactTime(moment.timestamp_ms))} · frame ${escapeHtml(moment.frame_id)} · source rank ${escapeHtml(moment.moment_rank)}</div></div>`;
-      return moment.watch_url_with_timestamp
-        ? `<a class="sequence-moment" href="${escapeAttr(moment.watch_url_with_timestamp)}" target="_blank" rel="noopener">${content}</a>`
-        : `<div class="sequence-moment">${content}</div>`;
+        `<div class="sequence-time">${missing ? '—' : `${escapeHtml(moment.timestamp || compactTime(moment.timestamp_ms))} · frame ${escapeHtml(moment.frame_id)} · source rank ${escapeHtml(moment.moment_rank)}`}</div></div>`;
+      return missing
+        ? `<div class="sequence-moment sequence-missing">${content}</div>`
+        : moment.watch_url_with_timestamp
+          ? `<a class="sequence-moment" href="${escapeAttr(moment.watch_url_with_timestamp)}" target="_blank" rel="noopener">${content}</a>`
+          : `<div class="sequence-moment">${content}</div>`;
     }).join('');
-    return `<article class="sequence-card"><div class="sequence-head"><b>#${row.rank} ${escapeHtml(row.video_id)}</b>` +
-      `<span class="sequence-meta">ordered distinct path · ${moments.length} moments · score ${escapeHtml(row.score)}</span></div>` +
+    const meta = partial
+      ? `partial coverage · ${row.moments_found ?? moments.filter(m => m.frame_id).length}/${moments.length} moments found — verify missing by eye`
+      : `ordered distinct path · ${moments.length} moments · score ${escapeHtml(row.score)}`;
+    return `<article class="sequence-card${partial ? ' sequence-card-partial' : ''}"><div class="sequence-head"><b>#${row.rank} ${escapeHtml(row.video_id)}</b>` +
+      `<span class="sequence-meta">${meta}</span></div>` +
       `<div class="sequence-strip" style="--moments:${Math.max(1, moments.length)}">${strip}</div></article>`;
   }
   function bindCards() {
@@ -396,15 +408,16 @@
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
       lastTemporal = data.hypotheses || [];
       const primarySequences = lastTemporal.filter(row => row.variant === 'primary');
+      const partialSequences = lastTemporal.filter(row => String(row.variant || '').startsWith('partial'));
       const temporalScope = data.scope?.name
         ? ` · ${data.scope.name} scope` : '';
-      temporalSummary.textContent = `${primarySequences.length} ordered visual sequences · ${lastTemporal.length} export candidates · ${data.elapsed_time}s${temporalScope}`;
-      document.getElementById('temporal-results').innerHTML = '<div class="temporal-note">Previewing primary paths in the main results area. Time-jitter variants are kept only for CSV export.</div>';
+      temporalSummary.textContent = `${primarySequences.length} ordered visual sequences · ${partialSequences.length} partial candidates · ${lastTemporal.length} export candidates · ${data.elapsed_time}s${temporalScope}`;
+      document.getElementById('temporal-results').innerHTML = '<div class="temporal-note">Previewing primary paths in the main results area. Partial candidates show which moments were not found. Time-jitter variants are kept only for CSV export.</div>';
       results.classList.add('sequence-results');
-      results.innerHTML = primarySequences.slice(0, 20).map(renderTemporalHypothesis).join('');
-      summary.innerHTML = `<b>${primarySequences.length}</b> ordered, distinct sequences in ${data.elapsed_time}s` +
+      results.innerHTML = [...primarySequences.slice(0, 20), ...partialSequences.slice(0, 15)].map(renderTemporalHypothesis).join('');
+      summary.innerHTML = `<b>${primarySequences.length}</b> ordered, distinct sequences in ${data.elapsed_time}s · <b>${partialSequences.length}</b> partial (verify missing moments)` +
         (data.warnings || []).map(w => `<div class="warning">${escapeHtml(w)}</div>`).join('');
-      if (!primarySequences.length) summary.innerHTML += '<div>No video has a complete chronologically ordered path for every query line.</div>';
+      if (!primarySequences.length && !partialSequences.length) summary.innerHTML += '<div>No video has a complete chronologically ordered path for every query line.</div>';
     } catch (error) { temporalSummary.innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`; }
     finally { temporalButton.disabled = false; }
   });

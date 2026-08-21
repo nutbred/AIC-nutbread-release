@@ -113,7 +113,7 @@ def build_temporal_slate(
                 valid = [
                     state
                     for state in states
-                    if int(row["timestamp_ms"]) - int(state[1][-1]["timestamp_ms"]) >= 200
+                    if int(row["timestamp_ms"]) > int(state[1][-1]["timestamp_ms"])
                     and str(row["frame_id"]) != str(state[1][-1]["frame_id"])
                 ]
                 if not valid:
@@ -129,6 +129,34 @@ def build_temporal_slate(
             score, ordered = max(states, key=lambda state: state[0])
             complete.append((score, video_id, ordered))
     complete.sort(reverse=True)
+
+    # Partial-coverage candidates: videos matched by >=2 (but not all) moment
+    # lists. They cannot form a complete ordered path, but they are the
+    # strongest leads for verifying the missing moments by eye.
+    # Ranking prefers videos whose found moments land on DISTINCT scenes
+    # (10 s buckets): three subqueries collapsing onto one scene is a
+    # false-positive pattern, while two well-separated hits are real leads.
+    total_moments = len(moment_results)
+    partials: list[tuple[int, float, str, int, list[dict[str, Any] | None]]] = []
+    if total_moments >= 2:
+        for video_id, moments in by_video.items():
+            found = len(moments)
+            if found < 2 or found == total_moments:
+                continue
+            rows: list[dict[str, Any] | None] = []
+            score = 0.0
+            buckets: set[int] = set()
+            for index in range(total_moments):
+                candidates = moments.get(index)
+                if candidates:
+                    best = min(candidates, key=lambda row: int(row["moment_rank"]))
+                    rows.append(best)
+                    score += 1.0 / (rrf_k + int(best["moment_rank"]))
+                    buckets.add(int(best["timestamp_ms"]) // 10_000)
+                else:
+                    rows.append(None)
+            partials.append((len(buckets), score, video_id, found, rows))
+        partials.sort(key=lambda item: (item[0], item[1]), reverse=True)
 
     output: list[dict[str, Any]] = []
     seen: set[tuple[str, tuple[str, ...]]] = set()
@@ -152,6 +180,7 @@ def build_temporal_slate(
         score: float,
         variant: str,
         moments: list[dict[str, Any]] | None = None,
+        moments_found: int | None = None,
     ) -> None:
         key = (video_id, tuple(frames))
         if key in seen or len(output) >= min(limit, 100):
@@ -164,6 +193,7 @@ def build_temporal_slate(
                 "frame_ids": frames,
                 "score": round(score, 8),
                 "variant": variant,
+                "moments_found": moments_found,
                 "moments": moments or [],
             }
         )
@@ -183,4 +213,30 @@ def build_temporal_slate(
                 hypotheses = list(row.get("frame_hypotheses") or [row["frame_id"]])
                 frames.append(str(hypotheses[min(hypothesis_index, len(hypotheses) - 1)]))
             append(video_id, frames, score, "time-jitter")
+
+    def missing_moment(index: int) -> dict[str, Any]:
+        return {
+            "moment_index": index,
+            "moment_rank": None,
+            "frame_id": "",
+            "timestamp_ms": None,
+            "timestamp": None,
+            "preview": {},
+            "watch_url_with_timestamp": None,
+            "badges": [],
+            "title": None,
+        }
+
+    for distinct, score, video_id, found, rows in partials[:20]:
+        if len(output) >= min(limit, 100):
+            break
+        frames = [str(row["frame_id"]) if row else "" for row in rows]
+        append(
+            video_id,
+            frames,
+            score,
+            f"partial-{found}of{total_moments}",
+            [preview_moment(row, index) if row else missing_moment(index) for index, row in enumerate(rows)],
+            moments_found=found,
+        )
     return output

@@ -6,6 +6,7 @@ import io
 import json
 import math
 import os
+import re
 import time
 from typing import Any
 
@@ -93,6 +94,33 @@ def search() -> tuple[Response, int] | Response:
     return jsonify(output)
 
 
+EVENT_LINE_RE = re.compile(r"^\s*[Ee]\s*\d+\s*[:.\-–—)\]]?\s*(.+)$")
+
+
+def _parse_temporal_lines(lines: list[str]) -> tuple[str, list[str]]:
+    """Split a TRAKE-style block into (context, [moment, ...]).
+
+    - Lines that start with an event marker (E1, E2, e3., E-4, ...) become moments;
+      the marker itself is stripped from the search text.
+    - The first non-marker line is treated as the shared context description.
+    - If no line has an event marker, fall back to the legacy behavior where
+      every line is a moment and there is no context.
+    """
+    context = ""
+    moments: list[str] = []
+    for line in lines:
+        match = EVENT_LINE_RE.match(line)
+        if match:
+            text = match.group(1).strip()
+            if text:
+                moments.append(text)
+        elif not context:
+            context = line
+    if not moments:
+        return "", list(lines)
+    return context, moments[:8]
+
+
 @app.post("/temporal-search")
 def temporal_search() -> tuple[Response, int] | Response:
     started = time.perf_counter()
@@ -100,7 +128,9 @@ def temporal_search() -> tuple[Response, int] | Response:
     raw_queries = payload.get("queries") or []
     if isinstance(raw_queries, str):
         raw_queries = raw_queries.splitlines()
-    queries = [str(value).strip() for value in raw_queries if str(value).strip()][:8]
+    context, queries = _parse_temporal_lines(
+        [str(value).strip() for value in raw_queries if str(value).strip()]
+    )
     mode = str(payload.get("mode") or "hybrid").strip().lower()
     scope = str(payload.get("scope") or "general").strip().lower()
     restrict_video = str(payload.get("restrict_video") or "").strip().upper() or None
@@ -116,8 +146,11 @@ def temporal_search() -> tuple[Response, int] | Response:
     warnings: list[str] = []
     try:
         for query in queries:
+            # Prepend the shared context line (if any) so dense channels search
+            # for the moment *within* the described scene.
+            search_query = f"{context}: {query}" if context else query
             output = pipeline.search(
-                query, mode=mode, restrict_video=restrict_video, scope=scope,
+                search_query, mode=mode, restrict_video=restrict_video, scope=scope,
             )
             warnings.extend(output.get("warnings") or [])
             moment_results.append([previews.decorate(event) for event in output["results"]])
@@ -134,6 +167,7 @@ def temporal_search() -> tuple[Response, int] | Response:
                 moment["query"] = queries[index]
     return jsonify(
         queries=queries,
+        context=context,
         scope={
             "name": scope,
             "video": restrict_video,
@@ -211,16 +245,21 @@ def _selected_rows(payload: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def _submission_rows(payload: dict[str, Any]) -> list[tuple[str, str]]:
-    selected = _selected_rows(payload)
-    if selected:
-        return selected
-    output = []
+    ranked: list[tuple[str, str]] = []
     for row in payload.get("ranked", [])[:100]:
         video_id = str(row.get("video_id") or row.get("video") or "").strip().upper()
         frame_id = str(row.get("frame_id") or row.get("frameid") or "").strip()
         if SAFE_VIDEO_ID.fullmatch(video_id) and SAFE_FRAME_ID.fullmatch(frame_id):
-            output.append((video_id, frame_id))
-    return output
+            ranked.append((video_id, frame_id))
+    selected = _selected_rows(payload)
+    if not selected:
+        return ranked[:100]
+    # Safety-net ranking: human-verified picks first (max points when correct),
+    # then the retrieval ranking as fallback. Any correct frame inside the
+    # top 100 still scores; the lower the rank, the lower the score.
+    chosen_keys = set(selected)
+    tail = [row for row in ranked if row not in chosen_keys]
+    return (selected + tail)[:100]
 
 
 def _csv_response(rows: list[list[str]], filename: str) -> Response:
@@ -261,7 +300,15 @@ def export_temporal() -> tuple[Response, int] | Response:
     for row in payload.get("hypotheses", [])[:100]:
         video_id = str(row.get("video_id") or "").strip().upper()
         frame_ids = [str(value).strip() for value in row.get("frame_ids") or []]
-        if SAFE_VIDEO_ID.fullmatch(video_id) and frame_ids and all(SAFE_FRAME_ID.fullmatch(value) for value in frame_ids):
+        variant = str(row.get("variant") or "")
+        if not SAFE_VIDEO_ID.fullmatch(video_id) or not frame_ids:
+            continue
+        if variant.startswith("partial"):
+            # Partial-coverage rows: blank fields are kept so missing moments
+            # can be filled in by hand before submission.
+            if all(value == "" or SAFE_FRAME_ID.fullmatch(value) for value in frame_ids):
+                rows.append([video_id, *frame_ids])
+        elif all(SAFE_FRAME_ID.fullmatch(value) for value in frame_ids):
             rows.append([video_id, *frame_ids])
     if not rows:
         return json_error("No valid temporal hypotheses to export", 400)
